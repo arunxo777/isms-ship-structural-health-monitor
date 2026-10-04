@@ -1,0 +1,31 @@
+# --- Secrets (templates are committed as *.example*) ---
+.env
+.env.*
+!.env.example
+firmware/esp-idf/main/isms_secrets.h
+firmware/arduino/src/secrets.h
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# --- Runtime artefacts and generated models ---
+backend/data/
+backend/anomaly_model.pkl
+
+# --- ESP-IDF / PlatformIO ---
+firmware/esp-idf/build/
+firmware/esp-idf/managed_components/
+firmware/esp-idf/sdkconfig.old
+.pio/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

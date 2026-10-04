@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ISMS · Hull Combat Information Center</title>
+<style>
+  :root{
+    --bg:#060d18; --panel:#0e1a2b; --panel2:#0a1422; --line:#1b2f4a;
+    --ink:#e9f0fa; --muted:#7f97b4; --dim:#4d6480;
+    --ok:#22c55e; --warn:#f5b700; --bad:#ef4444; --cyan:#38bdf8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI",Roboto,"Helvetica Neue",sans-serif;overflow:hidden}
+  body{display:grid;grid-template-rows:58px 1fr 30px}
+  .num{font-variant-numeric:tabular-nums}
+
+  header{display:flex;align-items:center;gap:14px;padding:0 18px;
+    background:linear-gradient(180deg,#0a1526,#070f1c);border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:15px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+  header h1 small{color:var(--cyan);font-weight:600;letter-spacing:.1em}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;
+    background:#0d1c2e;border:1px solid var(--line);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--muted);white-space:nowrap}
+  .chip b{color:var(--ink);font-weight:600}
+  .led{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:0 0 auto}
+  .led.ok{background:var(--ok);box-shadow:0 0 7px var(--ok)}
+  .led.warn{background:var(--warn);box-shadow:0 0 7px var(--warn)}
+  .led.bad{background:var(--bad);box-shadow:0 0 7px var(--bad)}
+  .spacer{margin-left:auto}
+  .clock{font-size:13px;color:var(--muted)}
+
+  main{display:grid;grid-template-columns:minmax(280px,1fr) minmax(340px,1.2fr) minmax(260px,.9fr);
+    gap:10px;padding:10px;min-height:0}
+  /* The Pi's DSI panel is 1280x720 after its 270-degree transform, so each
+     column scrolls on its own rather than letting the grid clip content. */
+  .col{display:flex;flex-direction:column;gap:10px;min-height:0;overflow-y:auto;overflow-x:hidden}
+  .col::-webkit-scrollbar{width:5px}
+  .col::-webkit-scrollbar-thumb{background:#22374f;border-radius:3px}
+  .col::-webkit-scrollbar-track{background:transparent}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-height:0}
+  .card.tight{padding:12px}
+  .t{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+    display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .t .spacer{margin-left:auto}
+
+  /* camera */
+  .cam{position:relative;background:#050b13;border-radius:10px;overflow:hidden;
+    aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+  .cam img{width:100%;height:100%;object-fit:cover;display:block}
+  .cam .empty{color:var(--dim);font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+  .cam .tag{position:absolute;top:8px;left:8px;padding:3px 8px;border-radius:6px;
+    font-size:10px;letter-spacing:.12em;text-transform:uppercase;background:#000a;backdrop-filter:blur(4px)}
+  .cam .tag.ok{color:var(--ok)} .cam .tag.bad{color:var(--warn)}
+  .cam .q{position:absolute;bottom:8px;right:8px;padding:3px 8px;border-radius:6px;
+    font-size:10px;background:#000a;color:var(--muted)}
+
+  .ev{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+  .ev .row{display:flex;align-items:center;gap:8px;font-size:12px}
+  .ev .row .nm{width:58px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;font-size:10px}
+  .ev .row .pc{width:38px;text-align:right;font-size:13px;font-weight:600}
+  .ev .row .st{font-size:9px;letter-spacing:.1em;padding:2px 6px;border-radius:4px;
+    background:#132234;color:var(--dim);text-transform:uppercase}
+  .ev .row .st.hit{background:#3b1414;color:#ff9d9d}
+  .bar{flex:1;height:7px;background:#0a1626;border-radius:5px;overflow:hidden}
+  .bar>i{display:block;height:100%;width:0;background:var(--cyan);transition:width .3s}
+  .bar>i.hot{background:var(--bad)}
+  .note{margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--muted)}
+
+  /* verdict */
+  #badge{border-radius:12px;padding:16px;text-align:center;font-weight:800;
+    letter-spacing:.1em;font-size:40px;line-height:1;background:#16324a;transition:background .3s}
+  #badge.NORMAL{background:linear-gradient(160deg,#14532d,#0f3d22)}
+  #badge.WARNING{background:linear-gradient(160deg,#7c5c04,#5c4403);color:#fff8dc}
+  #badge.CRITICAL{background:linear-gradient(160deg,#7f1d1d,#5c1414)}
+  #badge small{display:block;font-size:11px;letter-spacing:.18em;opacity:.75;
+    margin-top:8px;font-weight:600}
+  .fault{margin:12px 0 0;font-size:17px;font-weight:600;line-height:1.35}
+  .act{margin:8px 0 0;font-size:13px;line-height:1.5;color:#bcd0e6}
+
+  .ai{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--cyan);
+    border-radius:10px;padding:12px;margin-top:12px}
+  .ai .hd{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--cyan);margin-bottom:8px}
+  .ai p{margin:0;font-size:13px;line-height:1.55;color:#d6e3f2}
+  .ai .meta{margin-top:8px;font-size:10px;color:var(--dim);letter-spacing:.08em}
+
+  .hstrip{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
+  .ring{width:88px;height:88px;flex:0 0 auto}
+  .ring text{fill:var(--ink);font-size:22px;font-weight:700;font-family:inherit}
+  .ring .lbl{fill:var(--muted);font-size:7px;letter-spacing:.18em}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+  .kv div{font-size:11px;color:var(--muted);letter-spacing:.08em}
+  .kv b{display:block;color:var(--ink);font-size:16px;font-weight:600;margin-top:2px}
+
+  /* sensors */
+  .g{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 4px}
+  .g span{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .g b{font-size:19px;font-weight:600}
+  .gauge{margin-bottom:12px}
+  .mix{display:flex;flex-direction:column;gap:7px}
+  .mix .row{display:flex;align-items:center;gap:8px;font-size:11px}
+  .mix .row .nm{width:96px;color:var(--muted)}
+  .why{margin:8px 0 0;padding-left:16px;color:var(--muted);font-size:12px;line-height:1.6}
+  .why:empty::after{content:"Nothing outside the healthy envelope.";color:var(--dim);
+    list-style:none;margin-left:-16px;display:block}
+
+  .charts{display:grid;grid-template-rows:1fr 1fr;gap:10px;min-height:0}
+  .chart{display:flex;flex-direction:column;min-height:0}
+  canvas{width:100%;flex:1;min-height:46px;background:#0a1626;border-radius:8px}
+
+  footer{display:flex;align-items:center;gap:16px;padding:0 18px;font-size:11px;
+    color:var(--dim);background:#050b14;border-top:1px solid var(--line);letter-spacing:.08em}
+
+  @media (max-width:980px){
+    main{grid-template-columns:1fr 1fr;grid-auto-rows:min-content}
+    body{overflow:auto}
+    .col{overflow:visible}
+  }
+  @media (max-width:660px){
+    main{grid-template-columns:1fr}
+    header{flex-wrap:wrap;height:auto;padding:8px 12px}
+    body{grid-template-rows:auto 1fr 30px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ISMS <small>· Indigenous Hull CIC</small></h1>
+  <span class="chip"><i class="led" id="led_node"></i>Node <b id="s_node">offline</b></span>
+  <span class="chip"><i class="led" id="led_cam"></i>Camera <b id="s_cam">—</b></span>
+  <span class="chip"><i class="led" id="led_ai"></i>Gemma 4 <b id="s_ai">—</b></span>
+  <span class="chip">Mode <b id="s_mode">—</b></span>
+  <span class="spacer"></span>
+  <span class="chip">Zone <b id="s_zone">—</b></span>
+  <span class="clock num" id="clock">—</span>
+</header>
+
+<main>
+  <!-- ---------------- camera ---------------- -->
+  <div class="col">
+    <section class="card">
+      <div class="t">Hull camera · ESP32-S3
+        <span class="spacer"></span>
+        <span id="vision_eng" style="color:var(--cyan)">—</span>
+        <span id="fps">—</span>
+      </div>
+      <div class="cam">
+        <span class="empty" id="cam_empty">no frame</span>
+        <img id="cam" alt="" style="display:none" />
+        <span class="tag" id="cam_tag"></span>
+        <span class="q num" id="cam_q"></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+        <button type="button" id="btn_view" style="background:#132234;border:1px solid var(--line);color:var(--ink);
+          border-radius:6px;padding:4px 10px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer">
+          view: live
+        </button>
+        <span class="k" style="margin:0">refreshes 2 s · orange/cyan on overlay</span>
+      </div>
+      <div class="ev">
+        <div class="row">
+          <span class="nm">Rust</span>
+          <span class="bar"><i id="b_rust"></i></span>
+          <span class="pc num" id="v_rust">0%</span>
+          <span class="st" id="st_rust">clear</span>
+        </div>
+        <div class="row">
+          <span class="nm">Break</span>
+          <span class="bar"><i id="b_break"></i></span>
+          <span class="pc num" id="v_break">0%</span>
+          <span class="st" id="st_break">clear</span>
+        </div>
+      </div>
+      <p class="note" id="cam_note">Waiting for the first camera frame.</p>
+    </section>
+
+    <section class="card tight charts">
+      <div class="chart"><div class="t">Acceleration |a| (g)</div><canvas id="c1"></canvas></div>
+      <div class="chart"><div class="t">Microphone RMS</div><canvas id="c2"></canvas></div>
+    </section>
+  </div>
+
+  <!-- ---------------- verdict ---------------- -->
+  <div class="col">
+    <section class="card">
+      <div class="t">Structural verdict</div>
+      <div id="badge" class="NORMAL">WAIT<small id="badge_sub">awaiting hull node</small></div>
+      <p class="fault" id="fault">Awaiting hull-node stream</p>
+      <p class="act" id="act"></p>
+
+      <div class="ai">
+        <div class="hd"><i class="led" id="led_ai2"></i>AI assessment · Gemma 4 on Raspberry Pi</div>
+        <p id="ai_note">No AI note yet. The model is consulted when a fault is confirmed.</p>
+        <div class="meta" id="ai_meta"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="t">Hull health</div>
+      <div class="hstrip">
+        <svg class="ring" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="41" fill="none" stroke="#0a1626" stroke-width="9"/>
+          <circle id="ring" cx="50" cy="50" r="41" fill="none" stroke="var(--ok)" stroke-width="9"
+            stroke-linecap="round" transform="rotate(-90 50 50)"
+            stroke-dasharray="257.6" stroke-dashoffset="0"/>
+          <text id="ring_v" x="50" y="52" text-anchor="middle" class="num">—</text>
+          <text x="50" y="65" text-anchor="middle" class="lbl">HEALTH</text>
+        </svg>
+        <div class="kv">
+          <div>Time to fault<b id="v_ttf">None</b></div>
+          <div>Confidence<b class="num" id="v_conf">—</b></div>
+          <div>Anomaly rate<b class="num" id="v_rate">0.00 /min</b></div>
+          <div>RMS drift<b class="num" id="v_drift">0.0 %</b></div>
+        </div>
+      </div>
+      <div class="chart" style="height:80px;margin-top:12px">
+        <div class="t">Health trend</div><canvas id="c3"></canvas>
+      </div>
+    </section>
+  </div>
+
+  <!-- ---------------- sensors ---------------- -->
+  <div class="col">
+    <section class="card">
+      <div class="t">Live node</div>
+      <div class="gauge"><div class="g"><span>|a| accel</span><b class="num" id="v_ag">—</b></div>
+        <div class="bar"><i id="b_ag"></i></div></div>
+      <div class="gauge"><div class="g"><span>Gyro</span><b class="num" id="v_gy">—</b></div>
+        <div class="bar"><i id="b_gy"></i></div></div>
+      <div class="gauge"><div class="g"><span>Mic RMS</span><b class="num" id="v_ac">—</b></div>
+        <div class="bar"><i id="b_ac"></i></div></div>
+      <div class="gauge"><div class="g"><span>Acoustic peak</span><b class="num" id="v_pk">—</b></div>
+        <div class="bar"><i id="b_pk"></i></div></div>
+      <div class="g"><span>Gravity residual</span><b class="num" id="v_gr">—</b></div>
+    </section>
+
+    <section class="card">
+      <div class="t">Evidence mix</div>
+      <div class="mix" id="mix"></div>
+    </section>
+
+    <section class="card" style="overflow:auto">
+      <div class="t">Why</div>
+      <ul class="why" id="why"></ul>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <span>Baseline <b id="f_base">learning</b></span>
+  <span>Samples <b class="num" id="f_buf">0</b></span>
+  <span>Node age <b class="num" id="f_age">—</b></span>
+  <span>Verdict source <b id="f_src">physics</b></span>
+  <span class="spacer" style="margin-left:auto">ESP32-S3 · Raspberry Pi 5 · Gemma 4 QAT</span>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const S = { a: [], mic: [], health: [], frames: 0, lastFrameTs: 0, fps: 0, camBusy: false, camGen: 0, camBlob: null, view: "live" };
+
+/* ---------- charts ---------- */
+function draw(cv, data, color, lo, hi) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (!w || !h) return;
+  if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  g.strokeStyle = "#132133"; g.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    const y = (h / 4) * i;
+    g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke();
+  }
+  if (data.length < 2) {
+    g.fillStyle = "#3a4d64";
+    g.font = "10px Segoe UI, sans-serif";
+    g.fillText("waiting for node data", 8, h / 2 + 3);
+    return;
+  }
+
+  const mn = lo !== undefined ? lo : Math.min(...data);
+  const mx = hi !== undefined ? hi : Math.max(...data);
+  const span = (mx - mn) || 1;
+  const x = i => (i / (data.length - 1)) * w;
+  const y = v => h - ((v - mn) / span) * (h - 6) - 3;
+
+  g.beginPath(); g.moveTo(x(0), y(data[0]));
+  for (let i = 1; i < data.length; i++) g.lineTo(x(i), y(data[i]));
+  g.strokeStyle = color; g.lineWidth = 1.8; g.lineJoin = "round"; g.stroke();
+
+  g.lineTo(w, h); g.lineTo(0, h); g.closePath();
+  const grad = g.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, color + "44"); grad.addColorStop(1, color + "00");
+  g.fillStyle = grad; g.fill();
+}
+function push(arr, v) { arr.push(v); if (arr.length > 240) arr.shift(); }
+
+/* ---------- camera preview ---------- */
+// Live = raw ESP32 JPEG (written on every POST ACK). Overlay can lag OpenCV.
+// fetch + blob bypasses Chromium image cache so the panel really ticks every 2 s.
+function camUrl() {
+  const path = S.view === "overlay" ? "/camera-overlay" : "/camera-frame";
+  return path + "?t=" + Date.now();
+}
+async function pollCamera() {
+  if (S.camBusy) return;
+  S.camBusy = true;
+  const gen = ++S.camGen;
+  const ctrl = new AbortController();
+  const watchdog = setTimeout(() => ctrl.abort(), 1800);
+  try {
+    const res = await fetch(camUrl(), { cache: "no-store", signal: ctrl.signal });
+    if (!res.ok || gen !== S.camGen) return;
+    const blob = await res.blob();
+    if (gen !== S.camGen) return;
+    const url = URL.createObjectURL(blob);
+    const el = $("cam");
+    if (S.camBlob) URL.revokeObjectURL(S.camBlob);
+    S.camBlob = url;
+    el.src = url;
+    el.style.display = "block";
+    $("cam_empty").style.display = "none";
+    const now = performance.now();
+    if (S.lastFrameTs) {
+      const inst = 1000 / Math.max(now - S.lastFrameTs, 1);
+      S.fps = S.fps ? S.fps * 0.8 + inst * 0.2 : inst;
+      $("fps").textContent = S.fps.toFixed(1) + " fps";
+    }
+    S.lastFrameTs = now;
+  } catch {
+    /* abort / network — next tick retries */
+  } finally {
+    clearTimeout(watchdog);
+    if (gen === S.camGen) S.camBusy = false;
+  }
+}
+$("btn_view").onclick = () => {
+  S.view = S.view === "live" ? "overlay" : "live";
+  $("btn_view").textContent = "view: " + S.view;
+  S.camGen++;
+  S.camBusy = false;
+  pollCamera();
+};
+
+/* ---------- evidence mix ---------- */
+const MIX_NAMES = {
+  gravity_residual: "Gravity residual", gyro_energy: "Gyro energy",
+  acoustic: "Acoustic energy", cavitation_band: "Cavitation band",
+  vibration_drift: "Vibration drift", crack: "Break / crack",
+  rust: "Rust / corrosion", handling: "Handling"
+};
+function renderMix(c) {
+  const host = $("mix");
+  const keys = Object.keys(MIX_NAMES);
+  if (host.childElementCount !== keys.length) {
+    host.innerHTML = keys.map(k =>
+      `<div class="row"><span class="nm">${MIX_NAMES[k]}</span>
+       <span class="bar"><i id="m_${k}"></i></span></div>`).join("");
+  }
+  keys.forEach(k => {
+    const v = clamp01(Number(c?.[k] || 0));
+    const el = $("m_" + k);
+    el.style.width = (v * 100).toFixed(0) + "%";
+    el.className = v > 0.6 ? "hot" : "";
+  });
+}
+
+/* ---------- header lamps ---------- */
+function lamp(id, state) { $(id).className = "led" + (state ? " " + state : ""); }
+
+/* ---------- main refresh ---------- */
+async function tick() {
+  let v;
+  try {
+    v = await (await fetch("/latest-verdict", { cache: "no-store" })).json();
+  } catch {
+    lamp("led_node", "bad"); $("s_node").textContent = "no link";
+    return;
+  }
+
+  /* header */
+  const online = !!v.node_online;
+  lamp("led_node", online ? "ok" : "bad");
+  $("s_node").textContent = online ? "streaming" : "offline";
+  $("s_mode").textContent = v.mode || "—";
+  $("s_zone").textContent = v.zone_id || "—";
+
+  const camStatus = v.camera_status || "NO_FRAME";
+  const camOk = camStatus === "OK";
+  lamp("led_cam", camOk ? "ok" : camStatus === "NO_FRAME" ? "" : "warn");
+  $("s_cam").textContent = camStatus.replace(/_/g, " ").toLowerCase();
+  $("vision_eng").textContent = (v.camera?.vision_engine || v.vision_engine || "cv").toUpperCase();
+
+  const aiLive = v.source === "gemma4";
+  lamp("led_ai", aiLive ? "ok" : "");
+  lamp("led_ai2", aiLive ? "ok" : "");
+  $("s_ai").textContent = aiLive ? "answered" : "standby";
+
+  /* camera evidence */
+  const tag = $("cam_tag");
+  tag.textContent = camStatus.replace(/_/g, " ");
+  tag.className = "tag " + (camOk ? "ok" : "bad");
+  const fr = v.camera?.frame || {};
+  $("cam_q").textContent = fr.brightness !== undefined
+    ? `q ${(v.camera?.quality ?? 0).toFixed(2)} · lum ${fr.brightness} · focus ${fr.focus}`
+    : "";
+  $("cam_note").textContent = v.camera_note || "";
+
+  const rust = Number(v.rust_score || 0), brk = Number(v.crack_score || 0);
+  const rustHit = !!v.rust_detected, brkHit = !!v.break_detected;
+  $("b_rust").style.width = (clamp01(rust / 0.5) * 100).toFixed(0) + "%";
+  $("b_rust").className = rustHit ? "hot" : "";
+  $("v_rust").textContent = (rust * 100).toFixed(0) + "%";
+  $("st_rust").textContent = rustHit ? "confirmed" : (rust > 0.03 ? "seeing…" : "clear");
+  $("st_rust").className = "st" + (rustHit ? " hit" : "");
+  $("b_break").style.width = (clamp01(brk) * 100).toFixed(0) + "%";
+  $("b_break").className = brkHit ? "hot" : "";
+  $("v_break").textContent = (brk * 100).toFixed(0) + "%";
+  $("st_break").textContent = brkHit ? `confirmed ×${v.crack_count || 1}` : (brk > 0.2 ? "seeing…" : "clear");
+  $("st_break").className = "st" + (brkHit ? " hit" : "");
+
+  /* verdict */
+  const status = v.status || "NORMAL";
+  const badge = $("badge");
+  if (badge.dataset.s !== status) { badge.dataset.s = status; badge.className = status; }
+  badge.firstChild.textContent = status;
+  $("badge_sub").textContent = v.sustained ? "sustained · confirmed"
+    : online ? "within confirmation window" : "awaiting hull node";
+  $("fault").textContent = v.fault_type && v.fault_type !== "None"
+    ? v.fault_type : "No structural fault detected";
+  $("act").textContent = v.recommended_action || "";
+
+  const note = v.ai_note || v.reasoning || "";
+  $("ai_note").textContent = aiLive && note ? note
+    : note || "No AI note yet. The model is consulted when a fault is confirmed.";
+  const bits = [];
+  if (v.ai_analysed_at || v.analysed_at) bits.push("analysed " + (v.ai_analysed_at || v.analysed_at) + "Z");
+  bits.push("source: " + (v.source || "physics_ensemble"));
+  if (v.ai_status && v.ai_agrees === false) bits.push("model said " + v.ai_status + " — overruled by measurements");
+  $("ai_meta").textContent = bits.join("  ·  ");
+
+  /* health */
+  const hi = Number(v.health_index ?? 100);
+  const ring = $("ring");
+  const C = 2 * Math.PI * 41;
+  ring.setAttribute("stroke-dashoffset", (C * (1 - clamp01(hi / 100))).toFixed(1));
+  ring.setAttribute("stroke", hi >= 70 ? "var(--ok)" : hi >= 45 ? "var(--warn)" : "var(--bad)");
+  $("ring_v").textContent = hi.toFixed(0);
+  $("v_ttf").textContent = v.time_to_fault && v.time_to_fault !== "None" ? v.time_to_fault : "None";
+  $("v_conf").textContent = v.confidence !== undefined ? (Number(v.confidence) * 100).toFixed(0) + "%" : "—";
+  $("v_rate").textContent = Number(v.anomaly_rate_per_min || 0).toFixed(2) + " /min";
+  $("v_drift").textContent = Number(v.drift_rate_pct || 0).toFixed(1) + " %";
+
+  /* sensors */
+  const ag = Number(v.acc_g || 0), gy = Number(v.gyro_mag || 0);
+  const ac = Number(v.acoustic_rms || 0), pk = Number(v.acoustic_peak_freq || 0);
+  $("v_ag").textContent = ag.toFixed(3) + " g";
+  $("b_ag").style.width = (clamp01(ag / 2) * 100).toFixed(0) + "%";
+  $("v_gy").textContent = gy.toFixed(1) + " dps";
+  $("b_gy").style.width = (clamp01(gy / 60) * 100).toFixed(0) + "%";
+  $("v_ac").textContent = ac.toFixed(3);
+  $("b_ac").style.width = (clamp01(ac / 0.4) * 100).toFixed(0) + "%";
+  $("v_pk").textContent = pk.toFixed(0) + " Hz";
+  $("b_pk").style.width = (clamp01(pk / 2000) * 100).toFixed(0) + "%";
+  $("v_gr").textContent = Number(v.grav_res || 0).toFixed(3) + " g";
+
+  renderMix(v.contributions);
+
+  const reasons = Array.isArray(v.reasons) ? v.reasons : [];
+  $("why").innerHTML = reasons.map(r => `<li>${r}</li>`).join("");
+
+  /* footer */
+  $("f_base").textContent = v.baseline_ready ? "locked" : "learning";
+  $("f_buf").textContent = v.buffer_size ?? 0;
+  $("f_age").textContent = v.node_age_s != null ? v.node_age_s.toFixed(1) + " s" : "—";
+  $("f_src").textContent = v.source || "physics";
+
+  /* charts */
+  if (online) { push(S.a, ag); push(S.mic, ac); push(S.health, hi); }
+  draw($("c1"), S.a, "#38bdf8", 0.6, 1.6);
+  draw($("c2"), S.mic, "#a78bfa", 0, 0.35);
+  draw($("c3"), S.health, hi >= 70 ? "#22c55e" : hi >= 45 ? "#f5b700" : "#ef4444", 0, 100);
+}
+
+setInterval(tick, 1200);
+setInterval(pollCamera, 2000);
+setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString(); }, 1000);
+tick(); pollCamera();
+</script>
+</body>
+</html>

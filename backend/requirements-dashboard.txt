@@ -1,0 +1,4 @@
+# Optional pygame HDMI dashboard (dashboard.py). The default HMI is the web kiosk.
+pygame>=2.5
+requests>=2.31
+python-dotenv>=1.0
